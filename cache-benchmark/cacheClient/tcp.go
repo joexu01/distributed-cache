@@ -17,19 +17,19 @@ type tcpClient struct {
 }
 
 func (c *tcpClient) sendGet(key string) {
-	klen := len(key)
-	c.Write([]byte(fmt.Sprintf("G%d %s", klen, key)))
+	keyLen := len(key)
+	_, _ = c.Write([]byte(fmt.Sprintf("G%d %s", keyLen, key)))
 }
 
 func (c *tcpClient) sendSet(key, value string) {
-	klen := len(key)
-	vlen := len(value)
-	c.Write([]byte(fmt.Sprintf("S%d %d %s%s", klen, vlen, key, value)))
+	keyLen := len(key)
+	valueLen := len(value)
+	_, _ = c.Write([]byte(fmt.Sprintf("S%d %d %s%s", keyLen, valueLen, key, value)))
 }
 
 func (c *tcpClient) sendDel(key string) {
-	klen := len(key)
-	c.Write([]byte(fmt.Sprintf("D%d %s", klen, key)))
+	keyLen := len(key)
+	_, _ = c.Write([]byte(fmt.Sprintf("D%d %s", keyLen, key)))
 }
 
 func readLen(r *bufio.Reader) int {
@@ -47,19 +47,19 @@ func readLen(r *bufio.Reader) int {
 }
 
 func (c *tcpClient) recvResponse() (string, error) {
-	vlen := readLen(c.r)
-	if vlen == 0 {
+	valueLen := readLen(c.r)
+	if valueLen == 0 {
 		return "", nil
 	}
-	if vlen < 0 {
-		err := make([]byte, -vlen)
+	if valueLen < 0 {
+		err := make([]byte, -valueLen)
 		_, e := io.ReadFull(c.r, err)
 		if e != nil {
 			return "", e
 		}
 		return "", errors.New(string(err))
 	}
-	value := make([]byte, vlen)
+	value := make([]byte, valueLen)
 	_, e := io.ReadFull(c.r, value)
 	if e != nil {
 		return "", e
