@@ -4,14 +4,17 @@ import (
 	"log"
 )
 
-func New(cacheType string) Cache {
+func New(typ string) Cache {
 	var c Cache
-	if cacheType == "in_memory" {
+	if typ == "in_memory" {
 		c = newInMemoryCache()
 	}
-	if c == nil {
-		panic("unknown cache type: " + cacheType)
+	if typ == "rocksdb" {
+		c = newRocksDbCache()
 	}
-	log.Println(cacheType, "ready to serve")
+	if c == nil {
+		panic("unknown cache type " + typ)
+	}
+	log.Println(typ, "ready to serve")
 	return c
 }
