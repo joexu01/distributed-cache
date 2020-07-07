@@ -8,8 +8,9 @@ import (
 	"log"
 )
 
+var typ = flag.String("type", "in_memory", "cache type")
+
 func main() {
-	typ := flag.String("type", "in_memory", "cache type")
 	flag.Parse()
 	log.Println("type is", *typ)
 	c := cache.New(*typ)
