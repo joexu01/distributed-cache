@@ -9,8 +9,11 @@ import (
 	"errors"
 	"regexp"
 	"strconv"
+	"time"
 	"unsafe"
 )
+
+const BatchSize = 100
 
 func (c *rocksDbCache) Set(key string, value []byte) error {
 	k := C.CString(key)
@@ -67,4 +70,50 @@ func (c *rocksDbCache) GetStat() Stat {
 		}
 	}
 	return s
+}
+
+func flushBach(
+	db *C.rocksdb_t, b *C.rocksdb_writebatch_t, o *C.rocksdb_writeoptions_t) {
+	var e *C.char
+	C.rocksdb_write(db, o, b, &e)
+	if e != nil {
+		panic(C.GoString(e))
+	}
+	C.rocksdb_writebatch_clear(b)
+}
+
+func writeFunc(
+	db *C.rocksdb_t, c chan *pair, o *C.rocksdb_writeoptions_t) {
+	count := 0
+	//计时器的触发时间是1s
+	t := time.NewTimer(time.Second)
+	b := C.rocksdb_writebatch_create()
+	for {
+		select {
+		//如果channel中的数据先抵达
+		case p := <- c:
+			count++
+			key := C.CString(p.key)
+			value := C.CBytes(p.value)
+			C.rocksdb_writebatch_put(
+				b, key, C.size_t(len(p.key)), (*C.char)(value), C.size_t(len(p.value)))
+			C.free(unsafe.Pointer(key))
+			C.free(value)
+			if count == BatchSize {
+				flushBach(db, b, o)
+				count = 0
+			}
+			if !t.Stop() {
+				<- t.C
+			}
+			t.Reset(time.Second)
+		//1s内没有写操作请求就先把内存中的数据写到磁盘中
+		case <-t.C:
+			if count != 0 {
+				flushBach(db, b, o)
+				count = 0
+			}
+			t.Reset(time.Second)
+		}
+	}
 }
