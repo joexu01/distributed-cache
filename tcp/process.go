@@ -7,37 +7,76 @@ import (
 	"net"
 )
 
-func (s *Server) get(conn net.Conn, r *bufio.Reader) error {
-	key, err := s.readKey(r)
-	if err != nil {
-		return err
-	}
-	value, err := s.Get(key)
-	return sendResponse(value, err, conn)
+type result struct {
+	value []byte
+	err   error
 }
 
-func (s *Server) set(conn net.Conn, r *bufio.Reader) error {
+func (s *Server) get(ch chan chan *result, r *bufio.Reader) {
+	c := make(chan *result)
+	ch <- c
+	key, err := s.readKey(r)
+	if err != nil {
+		c <- &result{nil, err}
+		return
+	}
+
+	go func() {
+		value, err := s.Get(key)
+		c <- &result{value, err}
+	}()
+}
+
+func (s *Server) set(ch chan chan *result, r *bufio.Reader) {
+	c := make(chan *result)
+	ch <- c
+
 	key, value, err := s.readKeyAndValue(r)
 	if err != nil {
-		return err
+		c <- &result{nil, err}
+		return
 	}
 
-	return sendResponse(nil, s.Set(key, value), conn)
+	go func() {
+		c <- &result{nil, s.Set(key, value)}
+	}()
 }
 
-func (s *Server) del(conn net.Conn, r *bufio.Reader) error {
+func (s *Server) del(ch chan chan *result, r *bufio.Reader) {
+	c := make(chan *result)
+	ch <- c
 	key, err := s.readKey(r)
 	if err != nil {
-		return err
+		c <- &result{nil, err}
+		return
 	}
 
-	return sendResponse(nil, s.Del(key), conn)
+	go func() {
+		c <- &result{nil, s.Del(key)}
+	}()
+}
+
+func reply(conn net.Conn, resultChan chan chan *result) {
+	defer conn.Close()
+	for {
+		c, open := <-resultChan
+		if !open {
+			return
+		}
+		r := <-c
+		err := sendResponse(r.value, r.err, conn)
+		if err != nil {
+			log.Println("connection closed due to err:", err)
+			return
+		}
+	}
 }
 
 func (s *Server) process(conn net.Conn) {
-	defer conn.Close()
-
 	r := bufio.NewReader(conn)
+	resultChan := make(chan chan *result, 5000)
+	defer close(resultChan)
+	go reply(conn, resultChan)
 	for {
 		//在无限循环中调用ReadByte()方法，在不发生错误的情况下
 		//客户端可以复用这个连接
@@ -49,17 +88,13 @@ func (s *Server) process(conn net.Conn) {
 			return
 		}
 		if op == 'S' {
-			err = s.set(conn, r)
+			s.set(resultChan, r)
 		} else if op == 'G' {
-			err = s.get(conn, r)
+			s.get(resultChan, r)
 		} else if op == 'D' {
-			err = s.del(conn, r)
+			s.del(resultChan, r)
 		} else {
 			log.Println("connection closed due to invalid operation:", op)
-			return
-		}
-		if err != nil {
-			log.Println("connection closed due to error:", err)
 			return
 		}
 	}

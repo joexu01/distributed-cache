@@ -83,7 +83,7 @@ func writeFunc(
 	for {
 		select {
 		//如果channel中的数据先抵达
-		case p := <- c:
+		case p := <-c:
 			count++
 			key := C.CString(p.key)
 			value := C.CBytes(p.value)
@@ -96,7 +96,7 @@ func writeFunc(
 				count = 0
 			}
 			if !t.Stop() {
-				<- t.C
+				<-t.C
 			}
 			t.Reset(time.Second)
 		//1s内没有写操作请求就先把内存中的数据写到磁盘中
