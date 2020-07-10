@@ -52,13 +52,15 @@ func New(addr, cluster string) (Node, error) {
 	circle.NumberOfReplicas = 256 //设置虚拟节点个数
 	//每隔1秒将memberlist中集群节点列表更新到circle中
 	go func() {
-		m := list.Members()
-		nodes := make([]string, len(m))
-		for i, n := range m {
-			nodes[i] = n.Name
+		for {
+			m := list.Members()
+			nodes := make([]string, len(m))
+			for i, n := range m {
+				nodes[i] = n.Name
+			}
+			circle.Set(nodes)
+			time.Sleep(time.Second)
 		}
-		circle.Set(nodes)
-		time.Sleep(time.Second)
 	}()
 	return &node{circle, addr}, nil
 }
