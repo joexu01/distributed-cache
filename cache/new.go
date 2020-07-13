@@ -4,13 +4,13 @@ import (
 	"log"
 )
 
-func New(typ string) Cache {
+func New(typ string, ttl int) Cache {
 	var c Cache
 	if typ == "in_memory" {
-		c = newInMemoryCache()
+		c = newInMemoryCache(ttl)
 	}
 	if typ == "rocksdb" {
-		c = newRocksDbCache()
+		c = newRocksDbCache(ttl)
 	}
 	if c == nil {
 		panic("unknown cache type " + typ)

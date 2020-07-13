@@ -10,17 +10,19 @@ import (
 )
 
 var (
-	typ = flag.String("type", "in_memory", "cache type [in_memory|rocksdb]")
-	nodeAddr = flag.String("node", "127.0.0.1", "node address, default to 127.0.0.1")
+	typ         = flag.String("type", "in_memory", "cache type [in_memory|rocksdb]")
+	nodeAddr    = flag.String("node", "127.0.0.1", "node address, default to 127.0.0.1")
 	clusterAddr = flag.String("cluster", "", "cluster address")
+	ttl         = flag.Int("ttl", 30, "time to live, default to 30s")
 )
 
 func main() {
 	flag.Parse()
 	log.Printf("Service type: %s.\n", *typ)
 	log.Printf("Node address: %s.\n", *nodeAddr)
+	log.Printf("Cache TTL: %d.\n", *ttl)
 	log.Printf("Cluster address: %s.\n", *clusterAddr)
-	c := cache.New(*typ)
+	c := cache.New(*typ, *ttl)
 	n, err := cluster.New(*nodeAddr, *clusterAddr)
 	if err != nil {
 		panic(err)

@@ -19,12 +19,12 @@ type pair struct {
 	value []byte
 }
 
-func newRocksDbCache() *rocksDbCache {
+func newRocksDbCache(ttl int) *rocksDbCache {
 	options := C.rocksdb_options_create()
 	C.rocksdb_options_increase_parallelism(options, C.int(runtime.NumCPU()))
 	C.rocksdb_options_set_create_if_missing(options, 1)
 	var e *C.char
-	db := C.rocksdb_open(options, C.CString("/home/joseph/temp"), &e)
+	db := C.rocksdb_open_with_ttl(options, C.CString("/mnt/rocksdb"), C.int(ttl), &e)
 	if e != nil {
 		panic(C.GoString(e))
 	}

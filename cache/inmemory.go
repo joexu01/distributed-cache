@@ -1,15 +1,32 @@
 package cache
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
-type inMemoryCache struct {
-	cache map[string][]byte
-	mutex sync.RWMutex
-	Stat
+type value struct {
+	v       []byte
+	created time.Time
 }
 
-func newInMemoryCache() *inMemoryCache {
-	return &inMemoryCache{make(map[string][]byte), sync.RWMutex{}, Stat{}}
+type inMemoryCache struct {
+	cache map[string]value
+	mutex sync.RWMutex
+	Stat
+	ttl time.Duration
+}
+
+func newInMemoryCache(ttl int) *inMemoryCache {
+	c := &inMemoryCache{
+		make(map[string]value),
+		sync.RWMutex{},
+		Stat{},
+		time.Duration(ttl) * time.Second}
+	if ttl > 0 {
+		go c.expire()
+	}
+	return c
 }
 
 //Set(key string, value byte[]) is used to set a
@@ -18,11 +35,7 @@ func (c *inMemoryCache) Set(k string, v []byte) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	tmp, exist := c.cache[k]
-	if exist {
-		c.del(k, tmp)
-	}
-	c.cache[k] = v
+	c.cache[k] = value{v, time.Now()}
 	c.add(k, v)
 	return nil
 }
@@ -32,7 +45,7 @@ func (c *inMemoryCache) Set(k string, v []byte) error {
 func (c *inMemoryCache) Get(k string) ([]byte, error) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
-	return c.cache[k], nil
+	return c.cache[k].v, nil
 }
 
 //Del(key string) is used to delete the K-V pair in the
@@ -43,7 +56,7 @@ func (c *inMemoryCache) Del(k string) error {
 	v, exist := c.cache[k]
 	if exist {
 		delete(c.cache, k)
-		c.del(k, v)
+		c.del(k, v.v)
 	}
 	return nil
 }
@@ -51,4 +64,20 @@ func (c *inMemoryCache) Del(k string) error {
 //GetStat() returns a struct indicating the status of cache.
 func (c *inMemoryCache) GetStat() Stat {
 	return c.Stat
+}
+
+func (c *inMemoryCache) expire() {
+	for {
+		time.Sleep(c.ttl)
+		c.mutex.RLock()
+		for k, v := range c.cache {
+			c.mutex.RUnlock()
+
+			if v.created.Add(c.ttl).Before(time.Now()) {
+				_ = c.Del(k)
+			}
+			c.mutex.RLock()
+		}
+		c.mutex.RUnlock()
+	}
 }
